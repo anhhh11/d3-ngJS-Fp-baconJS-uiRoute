@@ -1,0 +1,94 @@
+﻿<!DOCTYPE html>
+<!--
+To change this license header, choose License Headers in Project Properties.
+To change this template file, choose Tools | Templates
+and open the template in the editor.
+-->
+<html>
+    <head>
+        <title></title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            table * {
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                -khtml-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;    
+            }    
+            table {
+                border: 1px solid #0081c2;
+                position: absolute;
+                cursor: pointer;
+            }
+            .pk,.fk {
+                position: relative;
+            }
+            th {
+                border-bottom: 1px solid #A31515;
+            }
+        </style>
+        <link href="bower_components/bootstrap/dist/css/bootstrap.css" rel="stylesheet" />
+        <link rel="stylesheet" href="bower_components/jquery-ui/themes/base/all.css" />
+    </head>
+    <body>
+        <div id='wrapper'>
+            <table id="tbl-users" class='table no-select'>
+                <thead>
+                    <tr><th>users</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td class='pk'>user_id</td></tr>
+                    <tr><td>name</td></tr>
+                    <tr><td>age</td></tr>
+                </tbody>
+            </table>
+            <table id="tbl-profiles" class='table no-select'>
+                <thead>
+                    <tr><th>profiles</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td class='pk'>profile_id</td></tr>
+                    <tr><td class='fk'>user_id</td></tr>
+                    <tr><td>gmail</td></tr>
+                    <tr><td>facebook</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <script src="bower_components/jsplumb/dist/external/jquery-1.9.0-min.js"></script>
+        <script src="bower_components/jsplumb/dist/external/jquery-ui-1.9.2.min.js"></script>
+        <script src="bower_components/jsplumb/dist/js/jquery.jsPlumb-1.7.5.js"></script>
+        <script type="text/javascript">
+//			$(".table").resizable({
+//				resize: function (event, ui) {
+//					jsPlumb.repaint(ui.helper);
+//				},
+//				handles: "all"
+//			});
+            jsPlumb.ready(function () {
+                jsPlumb.draggable($(".table"));
+                jsPlumb.draggable($(".pk"));
+                $(".pk").each(function () {
+                    console.log($(this));
+                    jsPlumb.addEndpoint($(this), {
+                        isSource: true,
+                        isTarget: true,
+                        endpoint: "Rectangle",
+                        containment: "#wrapper",
+                        anchor: "Right",
+                        paintStyle: {
+                            width: 10,
+                            height: 10,
+                            fillStyle: "green"
+                        }
+                    });
+                })
+            });
+        </script>
+    </body>
+
+
+
+</html>

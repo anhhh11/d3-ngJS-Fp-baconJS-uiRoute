@@ -1,0 +1,91 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title></title>
+</head>
+<body>
+    <input type="text" value="" id="keyword" />
+    <button id="search">search</button>
+    <br />
+    search:<span id="total-search-count"></span>
+    <br />
+    number of results:<span id="nr-result-count"></span>
+    <div id="result"></div>
+    <script src="bower_components/jquery/dist/jquery.js"></script>
+    <script src="bower_components/bacon/dist/Bacon.js"></script>
+    <script src="bower_components/lodash/lodash.js"></script>
+    <script src="bower_components/d3/d3.js"></script>
+    <script>
+        var searchBtn = $("#search"),
+            keywordInput = $("#keyword"),
+            totalSearchCounter = $("#total-search-count"),
+            nrResultCount = $("#nr-result-count"),
+            resultDiv = $("#result");
+
+        var items = d3
+            .select("#result")
+
+        var keywordInputES = Bacon.fromEvent(keywordInput, "keyup").map(function (e) {
+            return $(e.target).val();
+        }),
+            keywordEnterES = Bacon.fromEvent(keywordInput, "keyup").filter(function (e) {
+                return e.keyCode == 13;
+            }),
+            searchClickES = Bacon.fromEvent(searchBtn, "click");
+
+        var searchClickOrKeywordEnterStream = Bacon
+                .mergeAll([searchClickES, keywordEnterES]);
+        var resultStream = keywordInputES
+            .sampledBy(searchClickOrKeywordEnterStream)
+            .flatMapLatest(doSearch);
+        var totalSearchCountStream = searchClickOrKeywordEnterStream
+            .scan(0, function (acc, i) {
+                return acc + 1;
+            });
+        totalSearchCountStream.onValue(function (v) {
+            totalSearchCounter.text(v);
+        });
+        var totalResultCountStream = resultStream.map(function (v) { return v[1].length }).toProperty();
+        totalResultCountStream.onValue(function (v) {
+            nrResultCount.text(v);
+        });
+        resultStream.onValue(function (v) {
+            console.log("Data:", v);
+            var itemsWithData =
+                items
+                .selectAll("p")
+                .data(_.compact(v[1]), function (d, i) {
+                    return d;
+                });
+            itemsWithData // for delete
+                .exit()
+                .transition()
+                .duration(1000)
+                .style({ "background-color": "black", "color": "white", "opacity": 0 })
+                .remove();
+            itemsWithData //for update
+                .style({ opacity: 0 })
+                .transition()
+                .style("transform", function (_, i) {
+                    return "translate(" + 10 * i + "px" + "," + "0" + ")";
+                })
+                .style({ "background-color": "orange", "color": "black", "opacity": 1 })
+                .text(function (d, i) { return v[2][i] })
+            itemsWithData.enter() //for insert
+                .append("p")
+                .style({ "background-color": "white", "color": "white", "opacity": 0 })
+                .text(function (d, i) { return v[2][i]; })
+                .transition()
+                .duration(1000)
+                .style({ "background-color": "green", "color": "white", "opacity": 1 })
+
+
+        });
+        function doSearch(query) {
+            var url = "http://en.wikipedia.org/w/api.php?action=opensearch" +
+                "&format=json&search=" + encodeURI(query);
+            return Bacon.fromPromise($.ajax({ url: url, dataType: "jsonp" }));
+        }
+    </script>
+</body>
+</html>

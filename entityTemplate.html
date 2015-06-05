@@ -1,0 +1,13 @@
+﻿<div class="entity" data-droppable>
+    <h1 class="entity-name">{{entity.name}}</h1>
+    <div data-ng-repeat="(fieldName,fieldDetail) in entity.columns" class="field">
+        <span class="field-name">{{fieldName}}</span>
+        <span class="field-type">
+            {{fieldDetail.type}}
+            <span data-ng-switch data-on="fieldDetail.type">
+                <span data-ng-switch-when="fk" data-draggable>({{fieldDetail.belongsTo}})</span>
+                <span data-ng-switch-when="text">({{fieldDetail.length}})</span>
+            </span>
+        </span>
+    </div>
+</div>

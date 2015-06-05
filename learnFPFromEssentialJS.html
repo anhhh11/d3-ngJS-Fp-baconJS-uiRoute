@@ -1,0 +1,543 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title></title>
+</head>
+<body>
+    <script>
+        hasProp = {}.hasOwnProperty;
+
+        // a -> a
+        // hàm đơn vị(unit)
+        id = function (x) {
+            return x;
+        };
+
+        // a -> (() -> a)
+        // tạo hàm trả về hằng số
+        K = function (x) {
+            return function () {
+                return x;
+            }
+        };
+
+        slice1 = [].slice;
+
+        // chuyển các builtin prototype function sang hàm dùng như các hàm thông thường
+        builtin = Function.bind.bind(Function.call);
+
+        // [a] -> [a]
+        // chuyển sang dạng mảng
+        toArray = builtin(Array.prototype.slice);
+
+        // [a] -> [a]
+        // chuyển argument thành array
+        variadic = function () {
+            return toArray(arguments);
+        };
+
+        // (a b c ... -> b) -> (a -> b -> c ... -> d)
+        // VD: ncurry(f(a,b,c),3) === f(a)(b)(c)
+        // nguyên lý: gọi tích lũy tham số trả về hàm, nếu đủ tham sô thì gọi hàm
+        curryN = function (n, f, as) {
+            if (as == null) { as = []; }
+            return function () {
+                var bs = toArray(arguments);
+                bs = as.concat(bs);
+                if (bs.length < n) {
+                    return curryN(n, f, bs);
+                } else {
+                    return f.apply(null, bs);
+                }
+            }
+        };
+
+        // (a b c ... -> b) -> (a -> b -> c ... -> d)
+        // curry toàn bộ tham số của hàm f
+        curry = function (f) {
+            return curryN(f.length, f);
+        };
+
+        // f(a...) -> a... -> b
+        // apply f dựa vào arguments
+        apply = curry(function (f, as) {
+            return f.apply(null, as);
+        });
+
+        //bind function content here: http://stackoverflow.com/questions/22103354/javascripts-bind-implementation
+        // tạo object từ constructor với `this` là null
+        // TODO: ????
+        applyNew = curry(function (f, as) {
+            return new (f.bind.apply(f, [null].concat(toArray(as))));
+        });
+
+        // (a -> b -> ... -> i -> j ... -> m -> n) -> a -> b -> ... -> i -> (j -> m -> n)
+        // apply f một phần tham số
+        partial = function (f, as) {
+            var as = 2 <= arguments.length ? slice1.call(arguments, 1) : [];
+            return function () {
+                var args, bs = toArray(arguments);
+                args = as.concat(bs);
+                return f.apply(null, args);
+            }
+        }
+
+        // (a -> b -> c) -> (b -> a -> c)
+        flip2 = curry(function (f, x, y) {
+            return f(y, x);
+        });
+
+        // (a -> b -> c -> d) -> (c -> b -> a -> d)
+        flip3 = curry(function (f, x, y, z) {
+            return f(z, y, x);
+        });
+
+        // (a -> b -> ... -> z) -> (... -> b -> a -> z)
+        flip = function (f) {
+            return function () {
+                var as = toArray(arguments);
+                return f.apply(null, as.reverse());
+            }
+        };
+
+
+        // (* -> b) -> (a -> b)
+        unary = curry(function (f, x) {
+            return f(x);
+        });
+
+        // (* -> c) -> (a -> b -> c)
+        binary = curry(function (f, x, y) {
+            return f(x, y);
+        });
+
+        // (* -> c) -> (a -> b -> ... -> c)
+        nAry = curry(function (n, f) {
+            return curryN(n, function () {
+                var as = toArray(arguments);
+                return f.apply(null, as.slice(0, n));
+            });
+        });
+
+        // ((y->z) -> (x->y) -> ... -> (a->b)) -> (a... -> z)
+        compose = function () {
+            var fs = toArray(arguments);
+            return fs.reduce(function (f, g) {
+                return function () {
+                    var as = toArray(arguments)
+                    return f(g.apply(null, as));
+                };
+            });
+        }
+
+        //TODO: ???
+        // từ ds các func apply mỗi func 1 argument từ ds argument
+        pcompose = function () {
+            var fs = toArray(arguments);
+            return function (xs) {
+                return xs.map(function (x, i) {
+                    return typeof fs[i] == "function" ? fs[i](x) : void 0
+                });
+            };
+        };
+
+        // phiên bản mirror arguments của compose
+        pipe = flip(compose);
+        // (b -> b -> d) -> (b -> b) -> b -> b -> d
+        over = curry(function (f, g, x, y) {
+            return f(g(x), g(y));
+        });
+
+        // (* -> *) -> (* -> Bool)
+        // trả về predicate phủ định
+        complement = function (f) {
+            return function () {
+                return !f.apply(null, toArray(arguments));
+            };
+        };
+
+        // a -> a -> Bool
+        // kiểm tra xem 2 tham số có bằng nhau không(strict)
+        eq = curry(function (x, y) {
+            return x === y;
+        });
+
+        // a -> a -> Bool
+        // kiểm tra xem 2 tham số có không bằng nhau không(strict)
+        notEq = complement(eq);
+
+        // a -> String
+        // trả về loại kiểu dữ liệu của tham số
+        type = function (x) {
+            return Object.prototype.toString.call(x).slice(8, -1);
+        }
+
+        // * -> {*} -> Bool
+        //
+        is = curry(function (t, x) {
+            return type(x) === t.name;
+        });
+
+        // [a] -> {*}
+        toObject = function (xs) {
+            return xs.reduce(function toObject_reduce(acc, val, index) {
+                if (index % 2 != 0) {
+                    acc[xs[index - 1]] = val;
+                };
+                return acc;
+            }, {});
+        }
+
+        clone = function (xs) {
+            return Object.keys(xs).reduce(function (acc, key, index) {
+                var mustClone = is(Array, xs[key]) || is(Object, xs[key]);
+                acc[key] = mustClone ? clone(xs[key]) : xs[key];
+                return acc;
+            }, is(Array, xs) ? [] : {});
+        }
+        // [{k:v}] -> {k:v}
+        // tạo object mới với mới property là own property của các obj merge với nhau
+        // các obj được merge lại, các array bị thay thế
+        mergeAll = function (xs) {
+            return xs.reduce(function (acc, obj) {
+                for (key in obj) {
+                    if (!hasProp.call(obj, key)) continue;
+                    var isObject = is(Object, obj[key]),
+                        mustClone = is(Array, obj[key]) || isObject;
+                    acc[key] = mustClone ? (isObject ? mergeAll([acc[key], clone(obj[key])]) : clone(obj[key])) : obj[key];
+                }
+                return acc;
+            }, {});
+        };
+        // {k:v} -> {k:v} -> {k:v}
+        merge = curry(function (x, y) {
+            return mergeAll([x, y]);
+        });
+        // [a] -> ([a] -> k -> v -> i -> [a]) -> [a]
+        // với mỗi property của object đó, thực hiện hàm f và trả về acc
+        forOwn = curry(function (acc, f, obj) {
+            Object.keys(obj).forEach(function (k, i) {
+                acc = f(acc, k, obj[k], i);
+            });
+            return acc;
+        });
+
+        // (acc -> init-> index -> acc) -> init -> [a]
+        // tổng hợp trừ trái
+        reduce = fold = flip3(builtin(Array.prototype.reduce));
+
+        // (acc -> init-> index -> acc) -> init -> [a]
+        // tổng hợp từ phải
+        reduceRight = foldRight = flip3(builtin(Array.prototype.reduceRight));
+
+        // (a -> b) -> [a] -> [b]
+        // chuyển
+        map = flip2(builtin(Array.prototype.map));
+
+        // (a -> b) -> [a] -> [b]
+        // lọc
+        filter = flip2(builtin(Array.prototype.filter));
+
+        // (a->Bool) -> [a] -> Bool
+        // trả về true nếu 1 phần tử trong mảng là thỏa mãn predicate f
+        any = flip2(builtin(Array.prototype.some));
+
+        // (a->Bool) -> [a] -> Bool
+        // trả về true nếu tất cả phần tử trong mảng là thỏa mãn predicate f
+        all = flip2(builtin(Array.prototype.every));
+
+        // (a->*) -> [a] -> [a]
+        // với mỗi phần tử mảng gọi f
+        forEach = flip2(builtin(Array.prototype.forEach));
+
+        // a -> [a] -> Number
+        // trả về index của phần tử
+        indexOf = flip2(builtin(Array.prototype.indexOf));
+
+        // [a] -> [a] -> [a]
+        // nối 2 mảng với nhau trả về mảng mới
+        concat = builtin(Array.prototype.concat);
+
+        // Number -> Number -> [a] -> [a]
+        // lây phần tử trong khoảng [i,j)
+        slice = curry(function (i, j, xs) {
+            return xs.slice(i, j);
+        });
+
+        // [a] -> a
+        // lấy phần tử đầu
+        head = function (arg) {
+            return arg[0];
+        }
+
+        // [a] -> a
+        // lấy phần tử cuối
+        last = function (arg) {
+            return arg[arg.length - 1];
+        }
+        // [a] -> [a]
+        // tất cả các phần từ trừ phần tử cuối
+        initial = function (arg) {
+            return slice(0, -1, arg);
+        }
+        // [a] -> [a
+        // lấy tất cả các phần tử trừ phần từ đầu
+        tail = function (arg) {
+            return slice(1, arg.length, arg);
+        }
+        // Number -> [a] -> [a]
+        // lấy n kí tự đầu
+        take = slice(0);
+
+        // Number -> [a] -> [a]
+        // bỏ n kí tự đầu
+        drop = curry(function (n, arg) {
+            return slice(n, arg.length, arg);
+        });
+        // a -> [a] -> Bool
+        contains = curry(function (a, xs) {
+            return indexOf(a, xs) != -1;
+        });
+        // Number -> Number -> [a] -> [a]
+        // xóa từ vị trí x đi y phần tử trả về mảng mới
+        remove = curry(function (a, b, xs) {
+            var ys = xs.slice(0);
+            ys.splice(a, b);
+            return ys;
+        });
+        // (a , a -> Boolean) -> [a] -> [a]
+        // trả về mảng gồm các phần tử là duy nhất theo tiêu chí f (true -> giống nhau)
+        uniqWith = curry(function (f, xs) {
+            var ret = [],
+                fc = curry(f);
+            forEach(function (x, index) {
+                if (all(complement(fc(x)), take(index, xs))) ret.push(x);
+            }, xs);
+            return ret;
+        });
+        // [a] -> [a]
+        // trả về danh sách các phần tử lặp lại trong mảng
+        dups = function (xs) {
+            return xs.filter(function (x, i) {
+                return xs.indexOf(x) !== i;
+            });
+        };
+        // [a] -> [b]
+        // san các mảng thành 1 mảng
+        flatten = function (xs) {
+            var ref = [];
+            forEach(function (x, index) {
+                if (Array.isArray(x)) {
+                    ref = ref.concat(flatten(x));
+                } else {
+                    ref.push(x);
+                }
+            }, xs);
+            return ref;
+        }
+        // (a , a -> Boolean) -> [a] -> [a]
+        // trả về mảng mà các phần tử là duy nhất, dùng so sánh ==
+        uniq = uniqWith(function (x, y) { return x == y });
+        // [a] -> [a] -> [a]
+        // hợp của 2 mảng
+        union = compose(uniq, flatten);
+        // [a] -> [a] -> [a]
+        // giao của 2 mảng
+        intersection = compose(uniq, dups, flatten);
+        // (a->[b]) -> [a] -> [b]
+        // là flatMap hay selectMany
+        chain = compose(flatten, map);
+        // String -> [*] -> [*]
+        // lấy property từ danh sách obj
+        pluck = function (prop) {
+            return map(function (x) {
+                return x[prop];
+            });
+        };
+        // {String: (* -> Boolean)} -> {String : *} -> Boolean
+        where = curry(function (predObj, obj) {
+            return all(function (k) {
+                return predObj[k](obj[k]);
+            }, Object.keys(obj));
+        });
+        // {String : *} -> {String: *} -> Boolean
+        whereEq = curry(function (predObj, obj) {
+            return all(function (k) {
+                return predObj[k] === obj[k];
+            }, Object.keys(obj));
+        });
+        // {k:v} -> [v]
+        values = function (obj) {
+            var ret = [];
+            Object.keys(obj).forEach(function (k) {
+                if (!hasProp.call(obj, k)) return;
+                ret.push(obj[k]);
+            });
+            return ret;
+        }
+        // [[k,v]] -> {k:v}
+        fromPairs = reduce({}, function (acc, item) {
+            acc[item[0]] = item[1];
+            return acc;
+        });
+        // [a] -> [a] -> [a]
+        // tạo 1 mảng xen kẽ tử 2 mảng
+        interleave = curry(function (arg, ys) {
+            var x, xs;
+            x = arg[0], xs = 2 <= arg.length ? slice1.call(arg, 1) : [];
+            if (x == null) {
+                return ys;
+            }
+            return [x].concat(interleave(ys, xs));
+        });
+        // a -> [a] -> [a]
+        // tạo mảng xen giữa phần tử là 1 phần tử tùy chọn
+        intersperse = curry(function (x, xs) {
+            var ret = [];
+            forEach(function (y) {
+                ret.push(y, x);
+            }, xs);
+            ret.splice(ret.length - 1, 1);
+            return ret;
+        });
+        // [a] -> [a] -> [a]
+        // như intersperse những phần tử xen giữa tùy chọn là 1 mảng và dược làm phẳng.
+        intercalate = compose(flatten, intersperse);
+
+        // (a,b -> c) -> [a] -> [b] -> [c]
+        zipWith = curry(function (f, xs, ys) {
+            var ret = [], length = Math.max(xs.length, ys.length);
+            for (var i = 0; i < length; i++) {
+                ret.push(f(xs[i], ys[i]));
+            }
+            return ret;
+        });
+        // [a] -> [b] -> [[a,b]]
+        zip = zipWith(function (x, y) {
+            return [x, y];
+        });
+        // [String] -> [*] -> {String:*}
+        zipObj = pipe(zip, flatten, toObject);
+        // {String:*} -> [[String,*]]
+        toPairs = forOwn([[], []], function (acc, k, v, i) {
+            acc[0][i] = k;
+            acc[1][i] = v;
+            return acc;
+        });
+        // Number -> Number -> [Number]
+        range = curry(function (m, n) {
+            var ret = [];
+            for (var i = m; i < n; i++) {
+                ret.push(i);
+            }
+            return ret;
+        });
+        // [*] -> [*]
+        shuffle = function (xs) {
+            var ys = xs.slice(0), tmp;
+            for (var i = 0; i < ys.length; i++) {
+                j = Math.random() * (i + 1) | 0;
+                tmp = ys[i];
+                ys[i] = ys[j];
+                ys[j] = tmp;
+            }
+            return ys;
+        }
+        // String -> String
+        toLower = builtin(String.prototype.toLowerCase);
+        toUpper = builtin(String.prototype.toUpperCase);
+
+        // s -> {s:a} -> a
+        prop = curry(function (s, obj) {
+            return obj[s];
+        });
+
+        // (a->String) -> [a] -> [a]
+        // sắp xếp mảng theo tiêu chí quy định bởi f
+        sortBy = curry(function (f, xs) {
+            return xs.sort(function (x, y) {
+                var fx = f(x), fy = f(y);
+                if (fx > fy) return 1;
+                else if (fx < fy) return -1;
+                else return 0;
+            });
+        });
+        // {a->String} -> [a] -> {String : [a]}
+        groupBy = curry(function (f, xs) {
+            return xs.reduce(function (acc, item, i) {
+                var fi = f(item);
+                acc[fi] = acc[fi] || [];
+                acc[fi].push(item);
+                return acc;
+            }, {});
+        });
+        // {a->String} -> [a] -> {*}
+        countBy = pipe(groupBy, forOwn({}, function (acc, k, v) {
+            acc[k] = v.length;
+            return acc;
+        }));
+
+        // [*] -> String -> String
+        format = curry(function (xs, x) {
+            var i = xs.length;
+            return x.replace(/%(\d+)/g, function (_, i) {
+                return xs[--i] || '';
+            });
+        });
+        // [*] -> String -> String
+        template = curry(function (obj, x) {
+            return x.replace(/\{\{(.+?)\}\}/g, function (_, k) {
+                return obj[k] || '';
+            });
+        });
+        // RegExp -> String -> [String] | null
+        match = flip2(builtin(String.prototype.match));
+
+        // * -> [*] -> [*]
+        // xóa 1 phần tử có giá trị x từ mảng
+        removeOne = curry(function (x, xs) {
+            var ys;
+            ys = xs.slice(0);
+            ys.splice(xs.indexOf(x), 1);
+            return ys;
+        });
+
+        // [*] -> [*]
+        permutation = function (xs) {
+            if (xs.length == 0) return [[]];
+            var out = [];
+            forEach(function (x) {
+                forEach(function (ys) {
+                    out.push(concat([x], ys));
+                }, permutation(removeOne(x, xs)));
+            }, xs);
+            return out;
+        }
+
+        fmap = curry(function (f, ma) {
+            return ma.map(f);
+        });
+
+        //TODO: ???
+        ap = curry(function (mf, ma) {
+            return ma.ap(mf);
+        });
+
+        //TODO: ???
+        chain = curry(function (f, ma) {
+            return ma.chain(f);
+        });
+        //TODO: ???
+        seqM = curry(function (ctor, ms) {
+            ms.reduceRight(function (ma, mb) {
+                ma.chain(function (a) {
+                    mb.map(function (b) {
+                        [b].concat(a);
+                    });
+                });
+            });
+        });
+
+    </script>
+</body>
+</html>
